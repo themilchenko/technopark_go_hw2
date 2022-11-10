@@ -15,11 +15,11 @@ func ExecutePipeline(args ...job) {
 	for _, arg := range args {
 		wg.Add(1)
 		out := make(chan interface{})
-		go func(group *sync.WaitGroup, in, out chan interface{}, a job) {
-			defer group.Done()
+		go func(in, out chan interface{}, a job) {
+			defer wg.Done()
 			a(in, out)
 			close(out)
-		}(wg, in, out, arg)
+		}(in, out, arg)
 		in = out
 	}
 	wg.Wait()
@@ -32,7 +32,10 @@ func SingleHash(in, out chan interface{}) {
 		w.Add(1)
 		go func(w *sync.WaitGroup, val interface{}) {
 			defer w.Done()
-			s := fmt.Sprint(val)
+			s, ok := val.(string)
+			if !ok {
+				fmt.Println("input data is not a string")
+			}
 			fmt.Printf("SingleHash data %s\n", s)
 
 			mu.Lock()
@@ -51,11 +54,11 @@ func SingleHash(in, out chan interface{}) {
 
 			for index, str := range dataToCrc {
 				wg.Add(1)
-				go func(group *sync.WaitGroup, strToHash string, sl []string, i int) {
-					defer group.Done()
+				go func(strToHash string, sl []string, i int) {
+					defer wg.Done()
 					hash := DataSignerCrc32(strToHash)
 					sl[i] = hash
-				}(wg, str, hashSlice, index)
+				}(str, hashSlice, index)
 			}
 			wg.Wait()
 
@@ -68,7 +71,10 @@ func SingleHash(in, out chan interface{}) {
 func MultiHash(in, out chan interface{}) {
 	w := &sync.WaitGroup{}
 	for val := range in {
-		strVal := fmt.Sprint(val)
+		strVal, ok := val.(string)
+		if !ok {
+			fmt.Println("inup data is not a string")
+		}
 
 		w.Add(1)
 		go func(w *sync.WaitGroup) {
@@ -78,12 +84,12 @@ func MultiHash(in, out chan interface{}) {
 			for th := 0; th < 6; th++ {
 				concatStr := strconv.Itoa(th) + strVal
 				wg.Add(1)
-				go func(group *sync.WaitGroup, strToHash string, idx int, sl []string) {
-					defer group.Done()
+				go func(strToHash string, idx int, sl []string) {
+					defer wg.Done()
 					hash := DataSignerCrc32(strToHash)
 					fmt.Printf("%s MultiHash: crc32(th+step1)) %d %s\n", strVal, idx, hash)
 					sliceStr[idx] = hash
-				}(wg, concatStr, th, sliceStr)
+				}(concatStr, th, sliceStr)
 			}
 			wg.Wait()
 
